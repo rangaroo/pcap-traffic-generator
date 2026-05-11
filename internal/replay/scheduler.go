@@ -2,6 +2,7 @@ package replay
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -137,4 +138,41 @@ func cloneFrame(src []byte) []byte {
 	dst := make([]byte, len(src))
 	copy(dst, src)
 	return dst
+}
+
+// Run opens a TX ring on cfg.Iface and replays sessions.
+func Run(ctx context.Context, sessions []pcapio.Session, rw *mutate.Rewriter, cfg Config) (Stats, error) {
+	tx, err := afpacket.OpenTX(afpacket.TXConfig{Interface: cfg.Iface})
+	if err != nil {
+		return Stats{}, fmt.Errorf("open tx: %w", err)
+	}
+	defer tx.Close()
+
+	passes := cfg.Repeat
+	if passes <= 0 {
+		passes = 1
+	}
+
+	var stats Stats
+	stats.Sessions = uint64(len(sessions))
+
+	for pass := 0; pass < passes; pass++ {
+		if ctx.Err() != nil {
+			break
+		}
+
+		if cfg.Mode == ModeTimed {
+			err = runTimed(ctx, tx, sessions, rw, &stats)
+		} else {
+			err = runBurst(ctx, tx, sessions, rw, &stats)
+		}
+		if err != nil {
+			return stats, err
+		}
+
+		if cfg.Remutate && pass < passes-1 {
+			rw = mutate.NewRewriter(rw.Policy())
+		}
+	}
+	return stats, nil
 }
