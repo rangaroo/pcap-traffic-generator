@@ -34,6 +34,8 @@ func NewRewriter(p Policy) *Rewriter {
 	return &Rewriter{policy: p, mappings: make(map[flow.Key]Mapping)}
 }
 
+func (rw *Rewriter) Policy() Policy { return rw.policy }
+
 // Rewrite patches the IP and L4 headers of frame in-place.
 // key is the canonical flow key; dir is the packet's direction.
 // Returns error if frame is too short or has unsupported proto.
